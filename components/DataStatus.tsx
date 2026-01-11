@@ -1,5 +1,6 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { AuthModal } from './AuthModal';
 
 interface DataStatusProps {
   count: number;
@@ -7,6 +8,17 @@ interface DataStatusProps {
 }
 
 export const DataStatus: React.FC<DataStatusProps> = ({ count, onClear }) => {
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  const handleResetClick = () => {
+    setIsAuthOpen(true);
+  };
+
+  const handleAuthSuccess = () => {
+    setIsAuthOpen(false);
+    onClear();
+  };
+
   return (
     <div className="flex items-center justify-between glass-card px-6 py-4 rounded-2xl border border-white/5">
       <div className="flex items-center gap-3">
@@ -20,12 +32,19 @@ export const DataStatus: React.FC<DataStatusProps> = ({ count, onClear }) => {
       </div>
       
       {count > 0 && (
-        <button
-          onClick={onClear}
-          className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-red-400 transition-colors"
-        >
-          Reset Database
-        </button>
+        <>
+          <button
+            onClick={handleResetClick}
+            className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-red-400 transition-colors"
+          >
+            Reset Database
+          </button>
+          <AuthModal 
+            isOpen={isAuthOpen} 
+            onClose={() => setIsAuthOpen(false)} 
+            onSuccess={handleAuthSuccess} 
+          />
+        </>
       )}
     </div>
   );

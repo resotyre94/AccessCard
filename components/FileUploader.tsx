@@ -1,8 +1,9 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import * as XLSX from 'https://esm.sh/xlsx';
 import { Employee } from '../types';
 import { EXCEL_HEADERS } from '../constants';
+import { AuthModal } from './AuthModal';
 
 interface FileUploaderProps {
   onDataLoaded: (data: Employee[]) => void;
@@ -11,6 +12,15 @@ interface FileUploaderProps {
 
 export const FileUploader: React.FC<FileUploaderProps> = ({ onDataLoaded, label = "Upload Excel (.xlsx)" }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  const handleAuthSuccess = () => {
+    setIsAuthOpen(false);
+    // Programmatically trigger the hidden file input after authentication
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -46,24 +56,31 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onDataLoaded, label 
   };
 
   return (
-    <div className="relative group w-full">
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".xlsx, .xls"
-        className="hidden"
-        id="file-upload"
+    <>
+      <div className="relative group w-full">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept=".xlsx, .xls"
+          className="hidden"
+        />
+        <button
+          onClick={() => setIsAuthOpen(true)}
+          className="w-full cursor-pointer flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-zinc-700 hover:border-cyan-500/50 shadow-xl"
+        >
+          <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+          </svg>
+          {label}
+        </button>
+      </div>
+
+      <AuthModal 
+        isOpen={isAuthOpen} 
+        onClose={() => setIsAuthOpen(false)} 
+        onSuccess={handleAuthSuccess} 
       />
-      <label
-        htmlFor="file-upload"
-        className="cursor-pointer flex items-center justify-center gap-2 py-4 px-6 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold transition-all border border-zinc-700 hover:border-cyan-500/50 shadow-xl"
-      >
-        <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-        </svg>
-        {label}
-      </label>
-    </div>
+    </>
   );
 };

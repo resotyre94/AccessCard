@@ -7,51 +7,105 @@ import { EmployeeCard } from './components/EmployeeCard';
 import { ManualSearch } from './components/ManualSearch';
 import { DataStatus } from './components/DataStatus';
 import { Employee, AppStatus } from './types';
-import { STORAGE_KEY } from './constants';
+import { STORAGE_KEY, SYNC_URL } from './constants';
 
 const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
+  // Initial data fetch from Cloud and LocalStorage
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setEmployees(JSON.parse(stored));
-      } catch (e) {
-        console.error('Failed to parse stored data', e);
+    const initData = async () => {
+      setIsSyncing(true);
+      
+      // 1. Try to load from LocalStorage first for instant UI
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          setEmployees(JSON.parse(stored));
+        } catch (e) {
+          console.error('Failed to parse stored data', e);
+        }
       }
-    }
+
+      // 2. Fetch latest from Cloud to sync across devices
+      try {
+        const response = await fetch(SYNC_URL);
+        if (response.ok) {
+          const cloudData = await response.json();
+          if (Array.isArray(cloudData) && cloudData.length > 0) {
+            setEmployees(cloudData);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudData));
+          }
+        }
+      } catch (err) {
+        console.warn('Cloud sync failed, using local data:', err);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    initData();
   }, []);
 
-  const handleDataLoaded = (data: Employee[]) => {
+  const handleDataLoaded = async (data: Employee[]) => {
+    setIsSyncing(true);
+    // Update local state and storage
     setEmployees(data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setStatus(AppStatus.IDLE);
     setErrorMsg('');
     setCurrentEmployee(null);
+
+    // Push to Cloud
+    try {
+      const response = await fetch(SYNC_URL, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to sync to cloud');
+      console.log('Successfully synced to cloud');
+    } catch (err) {
+      console.error('Cloud upload error:', err);
+      alert('Local update successful, but cloud sync failed. Data may not be available on other devices.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
-  const handleClearData = () => {
-    if (window.confirm('Are you sure you want to clear all employee data?')) {
+  const handleClearData = async () => {
+    if (window.confirm('Are you sure you want to clear the global database? This affects all devices.')) {
+      setIsSyncing(true);
       setEmployees([]);
       localStorage.removeItem(STORAGE_KEY);
       setCurrentEmployee(null);
       setStatus(AppStatus.IDLE);
+
+      // Clear from Cloud
+      try {
+        await fetch(SYNC_URL, {
+          method: 'POST',
+          body: JSON.stringify([]),
+        });
+      } catch (err) {
+        console.error('Cloud clear error:', err);
+      } finally {
+        setIsSyncing(false);
+      }
     }
   };
 
   const lookupEmployee = useCallback((query: string) => {
     if (employees.length === 0) {
-      setErrorMsg('No Excel data uploaded. Please upload an Excel file first.');
+      setErrorMsg('No employee data found. Admin must upload a file first.');
       setStatus(AppStatus.ERROR);
       return;
     }
 
     const trimmedQuery = query.trim();
-    // Search by both Card_Number and Employee_ID as requested
     const found = employees.find(emp => 
       emp.cardNumber.toString().trim() === trimmedQuery || 
       emp.employeeId.toString().trim() === trimmedQuery
@@ -62,7 +116,7 @@ const App: React.FC = () => {
       setStatus(AppStatus.RESULT);
       setErrorMsg('');
     } else {
-      setErrorMsg(`"${trimmedQuery}" not found as an Employee ID or Card Number.`);
+      setErrorMsg(`"${trimmedQuery}" not found in database.`);
       setStatus(AppStatus.ERROR);
       setCurrentEmployee(null);
     }
@@ -82,15 +136,26 @@ const App: React.FC = () => {
       <div className="flex flex-col gap-6 max-w-2xl mx-auto pb-24">
         
         <div className="space-y-4">
-          <DataStatus 
-            count={employees.length} 
-            onClear={handleClearData} 
-          />
+          <div className="relative">
+            <DataStatus 
+              count={employees.length} 
+              onClear={handleClearData} 
+            />
+            {isSyncing && (
+              <div className="absolute -top-3 -right-3 flex items-center gap-2 bg-cyan-500 text-black text-[9px] font-black px-3 py-1 rounded-full animate-bounce shadow-lg shadow-cyan-500/40">
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                SYNCING CLOUD
+              </div>
+            )}
+          </div>
           
-          {employees.length === 0 && (
-            <div className="glass-card rounded-3xl p-10 border-dashed border-2 border-cyan-500/30 text-center animate-pulse">
-              <p className="text-zinc-400 mb-6 font-light">Import the Master Employee Excel Sheet to begin</p>
-              <FileUploader onDataLoaded={handleDataLoaded} />
+          {employees.length === 0 && !isSyncing && (
+            <div className="glass-card rounded-3xl p-10 border-dashed border-2 border-cyan-500/30 text-center">
+              <p className="text-zinc-400 mb-6 font-light">The database is currently empty.<br/>Admin authentication required to initialize.</p>
+              <FileUploader onDataLoaded={handleDataLoaded} label="Initialize Master Database" />
             </div>
           )}
         </div>
@@ -149,9 +214,9 @@ const App: React.FC = () => {
               </div>
             )}
             
-            <div className="pt-10 border-t border-zinc-800 flex justify-between items-center">
-              <h3 className="text-xs font-black text-zinc-600 uppercase tracking-[0.3em]">Database Options</h3>
-              <FileUploader onDataLoaded={handleDataLoaded} label="Update Database" />
+            <div className="pt-10 border-t border-zinc-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <h3 className="text-xs font-black text-zinc-600 uppercase tracking-[0.3em]">Master Database Control</h3>
+              <FileUploader onDataLoaded={handleDataLoaded} label="Update Global Database" />
             </div>
           </div>
         )}

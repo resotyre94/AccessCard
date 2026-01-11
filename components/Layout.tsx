@@ -17,7 +17,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <h1 className="text-3xl sm:text-4xl font-black text-center tracking-tighter">
           SMART<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-500">QR</span>
         </h1>
-        <p className="text-zinc-500 text-sm font-medium uppercase tracking-[0.2em] mt-1">Employee Lookup v2.5</p>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.3em]">Cloud Linked v3.0</p>
+          <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.8)]"></div>
+        </div>
       </header>
 
       {/* Main Content */}
